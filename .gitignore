@@ -1,3 +1,10 @@
 __pycache__/
 thirdparty/
 pretrained/
+
+results/
+
+*.egg-info
+
+*.jpg
+*.png

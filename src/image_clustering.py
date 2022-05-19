@@ -1,26 +1,38 @@
 '''Usage
-python src/image_clustering.py --mode train --type kmeans \
---input_dir '/data/kwkim/dataset/bladder/test_patches' \
---output_dir '/data/kwkim/aadw/results/test_20220425N0002/clustering' \
---model_dir '/data/kwkim/aadw/pretrained/kmeans_test' \
---trained 'bladder-kmeans-test' --n_cluster 3 4 5 
 
-python src/image_clustering.py --mode train --type kmeans \
---input_dir '/data/kwkim/aadw/dataset/bladder/patches-1024' \
---model_dir '/data/kwkim/aadw/pretrained/kmeans/1024' \
---trained 'bladder-kmeans-1024' --n_cluster 16 32 64 --epochs 5
+[[=====]]
+python src/image_clustering.py --mode predict --type kmeans \
+--input_dir '/data/kwkim/dataset/bladder/patches-1024' \
+--output_dir '/data/kwkim/aadw/results/gmm_6_1024/clustering' \
+--model_dir '/data/kwkim/aadw/pretrained/gmm/gmm_6_size_1024_20220502' \
+--trained 'gmm_6_size_1024_20220502' --n_cluster 4 
+
 
 python src/image_clustering.py --mode train_and_predict --type kmeans \
---input_dir '/data/kwkim/aadw/dataset/bladder/patches-1024' \
---output_dir '/data/kwkim/aadw/results/patches-1024/clustering' \
---model_dir '/data/kwkim/aadw/pretrained/kmeans/1024' \
---trained 'bladder-kmeans-1024' --n_cluster 16 32 64 --epochs 5
+--input_dir '/data/kwkim/dataset/bladder/test_patches' \
+--output_dir '/data/kwkim/aadw/results/test/cluster' \
+--model_dir '/data/kwkim/aadw/pretrained/test' \
+--trained 'bladder_test' --n_cluster 3
 
-python src/image_clustering.py --mode predict --type kmeans \
---input_dir '/data/kwkim/aadw/dataset/bladder/test-1024' \
---output_dir '/data/kwkim/aadw/results/test-1024/clustering' \
---model_dir '/data/kwkim/aadw/pretrained/kmeans/1024' \
---trained 'bladder-kmeans-1024' --n_cluster 16 32 64 
+
+python src/image_clustering.py --mode train_and_predict --type kmeans \
+--input_dir '/data/kwkim/dataset/bladder/trainset_v2.1' \
+--output_dir '/data/kwkim/aadw/results/bladder_kmeans_v2.1/20220518N002/cluster' \
+--model_dir '/data/kwkim/aadw/pretrained/kmeans/bladder_kmeans_v2.1_20220518N002' \
+--trained 'bladder_kmeans_v2.1_20220518N002' --n_cluster 48 80 99 --epochs 20
+
+<notes>
+bladder_kmeans_v2.1_20220518N001: vgg16
+bladder_kmeans_v2.1_20220518N002: resnet
+
+python src/image_clustering.py --mode train_and_predict --type kmeans \
+--input_dir '/data/kwkim/dataset/bladder/trainset_v1.0' \
+--output_dir '/data/kwkim/aadw/results/bladder_kmeans_v1.0/20220518N001/cluster' \
+--model_dir '/data/kwkim/aadw/pretrained/kmeans/bladder_kmeans_v1.0_20220518N001' \
+--trained 'bladder_kmeans_v1.0_20220518N001' --n_cluster 48 80 99 --epochs 20
+<notes>
+bladder_kmeans_v1.0_20220518N001: resnet
+
 
 [[ GMM ]]
 python src/image_clustering.py --mode debug \
@@ -57,73 +69,15 @@ python src/image_clustering.py --mode predict \
 
 
 '''
-import sys
-sys.path.append("..")
 from tqdm import tqdm
 import numpy as np
 
 import os
-import cv2
-import torch
 import pickle
 import argparse
-from torch import optim, nn
-from torchvision import models, transforms
-from aadw.models.feature_extraction import FeatureExtractor
+from models.feature_extraction import get_image_features
+from utils.common import get_files
 
-
-def get_model():
-  # Initialize the model
-  model = models.vgg16(pretrained=True)
-  # model = models.resnet152(pretrained=True)
-  new_model = FeatureExtractor(model)
-
-  # Change the device to GPU
-  device = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
-  new_model = new_model.to(device)
-  return new_model, device
-
-
-def get_transform():
-  # Transform the image, so it becomes readable with the model
-  transform = transforms.Compose([
-    transforms.ToPILImage(),
-    transforms.CenterCrop(512),
-    transforms.Resize(448),
-    transforms.ToTensor()                
-  ])
-  return transform
-
-
-def get_list(dir_: str) -> list:
-    # list_ = []
-    # for (dirpath, dirnames, filenames) in walk(dir_):
-    #   list_.append(os.path.join(dirpath, f) for f in filenames)
-    # return list_
-    return [os.path.join(d, x) for d, _, files in os.walk(dir_) for x in files]
-
-
-def extract_image_features(samples, new_model, transform, device):
-  features = []
-  for item in tqdm(samples, desc='Feature Extraction'):
-    # Read the file
-    img = cv2.imread(item)
-    # Transform the image
-    img = transform(img)
-    # Reshape the image. PyTorch model reads 4-dimensional tensor
-    # [batch_size, channels, width, height]
-    img = img.reshape(1, 3, 448, 448)
-    img = img.to(device)
-    # We only extract features, so we don't need gradient
-    with torch.no_grad():
-    # Extract the feature from the image
-      feature = new_model(img)
-    # Convert to NumPy Array, Reshape it, and save it to features variable
-    features.append(feature.cpu().detach().numpy().reshape(-1))
-
-  # Convert to NumPy Array
-  features = np.array(features)
-  return features
 
 def save_pkl(outdir:str, o_filename:str, model):
   print(f'[D]model save directory: {outdir}')
@@ -146,9 +100,9 @@ def split_samples(list_:list) -> list:
   return split_list
 
 
-def dbscan(outdir:str, o_filename: str, samples, n_clusters, new_model, device, transform):
+def dbscan(outdir:str, o_filename: str, samples, n_clusters):
   print(f'[I] Input Dataset Size: {len(samples)}')
-  features = extract_image_features(samples, new_model, transform, device)
+  features = get_image_features(samples)
   # DBSCAN
   from sklearn.cluster import DBSCAN
   # n_components로 미리 군집 개수 설정
@@ -156,17 +110,16 @@ def dbscan(outdir:str, o_filename: str, samples, n_clusters, new_model, device, 
     'eps': 0.5,
     'min_samples': 12
   }
-  print(f'[D] ========== GaussianMixture ==========')
+  print(f'[I] ========== GaussianMixture ==========')
   for n_cluster in n_clusters:
     dbscan = DBSCAN(**dbscan_kwargs)
-    # gmm_labels = gmm.fit_predict(data)
     dbscan.fit(features)
     save_pkl(outdir, o_filename+'_'+str(n_cluster), dbscan)
 
 
-def gmm(outdir:str, o_filename: str, samples, n_clusters, new_model, device, transform):
+def gmm(outdir:str, o_filename: str, samples, n_clusters):
   print(f'[I] Input Dataset Size: {len(samples)}')
-  features = extract_image_features(samples, new_model, transform, device)
+  features = get_image_features(samples)
   # GMM 적용
   from sklearn.mixture import GaussianMixture
   # n_components로 미리 군집 개수 설정
@@ -174,21 +127,24 @@ def gmm(outdir:str, o_filename: str, samples, n_clusters, new_model, device, tra
     # 'n_components': 3, 
     'random_state': 42,
   }
-  print(f'[D] ========== GaussianMixture ==========')
+  print(f'[I] ========== GaussianMixture ==========')
   for n_cluster in n_clusters:
     gmm = GaussianMixture(n_components=n_cluster, **gmm_kwargs)
-    # gmm_labels = gmm.fit_predict(data)
     gmm.fit(features)
     save_pkl(outdir, o_filename+'_'+str(n_cluster), gmm)
 
 
-def kmeans(outdir:str, o_filename: str, samples, epochs, n_clusters, new_model, device, transform):
+def kmeans(outdir:str, o_filename: str, samples, epochs, _n_clusters):
+  n_clusters = list()
+  if isinstance(_n_clusters, int):
+    n_clusters.append(_n_clusters)
+  else:
+    n_clusters = _n_clusters
   ''' K-Means clustering
   '''
   print(f'[I] Input Dataset Size: {len(samples)}')
   kmeans_kwargs = {
     "init": "random",
-    # "n_init": 10,
     "max_iter": 300,
     "random_state": 42,
   }
@@ -202,7 +158,7 @@ def kmeans(outdir:str, o_filename: str, samples, epochs, n_clusters, new_model, 
   # Extract Features
   features_list = []
   for split in split_list:
-    features = extract_image_features(split, new_model, transform, device)
+    features = get_image_features(samples)
     features_list.append(features)
 
   # Get Model and learning
@@ -215,7 +171,6 @@ def kmeans(outdir:str, o_filename: str, samples, epochs, n_clusters, new_model, 
       from sklearn.cluster import MiniBatchKMeans
       kmeans = MiniBatchKMeans(n_clusters=n_cluster, **kmeans_kwargs)
       epochs_ = epochs
-
       
     for _ in tqdm(range(epochs_), desc='K-Means Learning'):
       for features in features_list:
@@ -226,16 +181,17 @@ def kmeans(outdir:str, o_filename: str, samples, epochs, n_clusters, new_model, 
 
     save_pkl(outdir, o_filename+'_'+str(n_cluster), kmeans)
 
-def train(type_: str, outdir:str, o_filename: str, samples, epochs, n_clusters, new_model, device, transform):
+
+def train(type_: str, outdir:str, o_filename: str, samples, epochs, n_clusters):
   if "kmeans"==type_:
-    kmeans(outdir, o_filename, samples, epochs, n_clusters, new_model, device, transform)
+    kmeans(outdir, o_filename, samples, epochs, n_clusters)
   elif "gmm"==type_:
-    gmm(outdir, o_filename, samples, n_clusters, new_model, device, transform)
+    gmm(outdir, o_filename, samples, n_clusters)
   elif "dbscan"==type_:
-    dbscan(outdir, o_filename, samples, n_clusters, new_model, device, transform)
+    dbscan(outdir, o_filename, samples, n_clusters)
 
 
-def predict(samples, clustering_model, feature_extractor, device, transform):
+def _predict(samples, clustering_model):
   if 10000 < len(samples):
     n, _ = divmod(len(samples), 10000)
     split_list = np.array_split(samples, n)
@@ -246,18 +202,30 @@ def predict(samples, clustering_model, feature_extractor, device, transform):
 
   for split in tqdm(split_list, desc="Prediction(by split set)"):
     print(f'[D] subset type: {type(split)}, length: {len(split)}')
-    features = extract_image_features(split, feature_extractor, transform, device)
+    features = get_image_features(samples)
     t_labels = clustering_model.predict(features)
     labels.extend(t_labels)
 
   return labels
 
 
+def predict(model_dir, outdir, o_filename, samples, _n_clusters):
+# def predict(args, s):
+  n_clusters = list()
+  if isinstance(_n_clusters, int):
+    n_clusters.append(_n_clusters)
+  else:
+    n_clusters = _n_clusters
+
+  for n_cluster in n_clusters:
+    model_filename = os.path.join(model_dir, o_filename+'_'+str(n_cluster)+'.pkl')
+    c_model = pickle.load(open(model_filename, "rb"))
+    l = _predict(samples, c_model)
+    save(outdir+'_'+str(n_cluster), l, samples)
+    
+
 def save(outdir, labels, samples):
   max_label = max(labels)
-  # make output directory
-  # if os.path.exists(outdir) is False:
-  #   os.mkdir(outdir)
   print(f'[D]output diredtory: {outdir}')
   if not os.path.isdir(outdir):
     print('[D]The directory is not present. Creating a new one..')
@@ -281,54 +249,42 @@ def save(outdir, labels, samples):
 
 def main():
   parser = argparse.ArgumentParser(description='Image clustering')
-  parser.add_argument('--mode', dest='mode', choices=['train', 'predict', 'train_and_predict', 'debug', 'd2'],
+  parser.add_argument('--mode', dest='mode', choices=['train', 'predict', 'train_and_predict'],
                       default='train-and-predict', 
                       help='Operation mode [train|predict|train_and_predict] (default: predict)')
   parser.add_argument('--type', dest='type', choices=['kmeans', 'gmm', 'dbscan'],
                       default='kmeans', 
                       help='Clustering model type')
   parser.add_argument('--input_dir', dest='indir', 
-                      # default='/data/kwkim/aadw/dataset/in',
                       default='/data/kwkim/aadw/dataset/bladder/test_patches',
                       help='Train Dataset Directory (default: /data/kwkim/aadw/dataset/in)')
   parser.add_argument('--output_dir', dest='outdir', 
-                      # default='/data/kwkim/aadw/dataset/out',
                       default='/data/kwkim/aadw/results/test_clustering',
                       help='Result Directory (default: /data/kwkim/aadw/dataset/out)')
   parser.add_argument('--model_dir', dest='mdir', 
-                      # default='/data/kwkim/aadw/result',
                       default='/data/kwkim/aadw/test_trained',
                       help='Result Directory (default: /data/kwkim/aadw/dataset/out)')
   parser.add_argument('--trained', dest='trained', 
-                      # default='kmeans_result',
                       default='gmm-test',
                       help='...(default: kmeans_result)')
   parser.add_argument('--epochs', dest='epochs', 
                       default=10, type=int,
                       help='the number of epochs(default: 10)')
-  parser.add_argument('--n_cluster', dest='ncluster', required=True, 
+  parser.add_argument('--n_cluster', dest='ncluster', required=False, 
                       nargs='+', type=int)
 
   args = parser.parse_args()
 
-  def _predict(args, s, n, d, t):
-    for n_cluster in args.ncluster:
-      model_filename = os.path.join(args.mdir, args.trained+'_'+str(n_cluster)+'.pkl')
-      c_model = pickle.load(open(model_filename, "rb"))
-      l = predict(s, c_model, n, d, t)
-      save(args.outdir+'_'+str(n_cluster), l, s)
 
-  n, d = get_model()
-  t = get_transform()
-  s = get_list(args.indir)
+  s = get_files(args.indir)
 
   if "train"==args.mode:
-    train(args.type, args.mdir, args.trained, s, args.epochs, args.ncluster, n, d, t)
+    train(args.type, args.mdir, args.trained, s, args.epochs, args.ncluster)
   elif "predict"==args.mode:
-    _predict(args, s, n, d, t)
+    predict(args.mdir, args.outdir, args.trained, s, args.ncluster)
   elif "train_and_predict"==args.mode:
-    train(args.type, args.mdir, args.trained, s, args.epochs, args.ncluster, n, d, t)
-    _predict(args, s, n, d, t)
+    train(args.type, args.mdir, args.trained, s, args.epochs, args.ncluster)
+    predict(args.mdir, args.outdir, args.trained, s, args.ncluster)
 
   return 0
 
