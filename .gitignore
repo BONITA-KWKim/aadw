@@ -1,6 +1,7 @@
 __pycache__/
 thirdparty/
 pretrained/
+.ipynb_checkpoints/
 
 results/
 

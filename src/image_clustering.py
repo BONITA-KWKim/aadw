@@ -1,4 +1,16 @@
 '''Usage
+python src/image_clustering.py --mode train_and_predict --type kmeans \
+--input_dir '/data/kwkim/dataset/colpo/COLPO_data_v3_roi' \
+--output_dir '/data/kwkim/aadw/results/colpo_v3_roi/clustering' \
+--model_dir '/data/kwkim/aadw/pretrained/kmeans/colpo_v3_roi' \
+--trained 'colpo_v3_roi' --n_cluster 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20
+
+python src/image_clustering.py --mode train_and_predict --type kmeans \
+--input_dir '/data/kwkim/dataset/colpo/COLPO_data_v3_roi' \
+--output_dir '/data/kwkim/aadw/results/colpo_v3_roi/clustering' \
+--model_dir '/data/kwkim/aadw/pretrained/kmeans/colpo_v3_roi' \
+--trained 'colpo_v3_roi' --n_cluster 4
+
 
 [[=====]]
 python src/image_clustering.py --mode predict --type kmeans \
@@ -69,14 +81,50 @@ python src/image_clustering.py --mode predict \
 
 
 '''
-from tqdm import tqdm
-import numpy as np
-
 import os
 import pickle
 import argparse
+import time
+import numpy as np
+
+from tqdm import tqdm
+from sklearn.metrics import silhouette_score
+from sklearn.metrics import davies_bouldin_score
+from sklearn.metrics import calinski_harabasz_score
+
 from models.feature_extraction import get_image_features
+from models.feature_extraction import base_extractor
 from utils.common import get_files
+
+
+def arguments():
+  parser = argparse.ArgumentParser(description='Image clustering')
+  parser.add_argument('--mode', dest='mode', choices=['train', 'predict', 'train_and_predict'],
+                      default='train-and-predict', 
+                      help='Operation mode [train|predict|train_and_predict] (default: predict)')
+  parser.add_argument('--type', dest='type', choices=['kmeans', 'gmm', 'dbscan'],
+                      default='kmeans', 
+                      help='Clustering model type')
+  parser.add_argument('--input_dir', dest='indir', 
+                      default='/data/kwkim/aadw/dataset/bladder/test_patches',
+                      help='Train Dataset Directory (default: /data/kwkim/aadw/dataset/in)')
+  parser.add_argument('--output_dir', dest='outdir', 
+                      default='/data/kwkim/aadw/results/test_clustering',
+                      help='Result Directory (default: /data/kwkim/aadw/dataset/out)')
+  parser.add_argument('--model_dir', dest='mdir', 
+                      default='/data/kwkim/aadw/test_trained',
+                      help='Result Directory (default: /data/kwkim/aadw/dataset/out)')
+  parser.add_argument('--trained', dest='trained', 
+                      default='gmm-test',
+                      help='...(default: kmeans_result)')
+  parser.add_argument('--epochs', dest='epochs', 
+                      default=10, type=int,
+                      help='the number of epochs(default: 10)')
+  parser.add_argument('--n_cluster', dest='ncluster', required=False, 
+                      nargs='+', type=int)
+
+  args = parser.parse_args()
+  return args
 
 
 def save_pkl(outdir:str, o_filename:str, model):
@@ -102,7 +150,8 @@ def split_samples(list_:list) -> list:
 
 def dbscan(outdir:str, o_filename: str, samples, n_clusters):
   print(f'[I] Input Dataset Size: {len(samples)}')
-  features = get_image_features(samples)
+  model, device, transform = base_extractor()
+  features = get_image_features(samples, model, device, transform)
   # DBSCAN
   from sklearn.cluster import DBSCAN
   # n_components로 미리 군집 개수 설정
@@ -119,7 +168,8 @@ def dbscan(outdir:str, o_filename: str, samples, n_clusters):
 
 def gmm(outdir:str, o_filename: str, samples, n_clusters):
   print(f'[I] Input Dataset Size: {len(samples)}')
-  features = get_image_features(samples)
+  model, device, transform = base_extractor()
+  features = get_image_features(samples, model, device, transform)
   # GMM 적용
   from sklearn.mixture import GaussianMixture
   # n_components로 미리 군집 개수 설정
@@ -157,8 +207,9 @@ def kmeans(outdir:str, o_filename: str, samples, epochs, _n_clusters):
 
   # Extract Features
   features_list = []
+  model, device, transform = base_extractor()
   for split in split_list:
-    features = get_image_features(samples)
+    features = get_image_features(split, model, device, transform)
     features_list.append(features)
 
   # Get Model and learning
@@ -191,7 +242,34 @@ def train(type_: str, outdir:str, o_filename: str, samples, epochs, n_clusters):
     dbscan(outdir, o_filename, samples, n_clusters)
 
 
-def _predict(samples, clustering_model):
+def save_results(type_, score, input_dir):
+  import json
+  result = {type_: score}
+  with open(os.path.join(input_dir, "clustering-results.txt"), "w") as f:
+    f.write(json.dumps(result))
+
+
+METRICS = {
+  "silhouette": silhouette_score,
+  "dbindex": davies_bouldin_score,
+  "chindex": calinski_harabasz_score
+}
+def cluster_metric(features, labels, input_dir, 
+                   saveflag:bool=True, type_:str="silhouette"):
+  start = time.time()
+  score = METRICS[type_](features, labels)
+  end = time.time()
+  elapsed = end - start
+
+  print(f'[D] Elapsed time(Metric): {elapsed}')
+
+  if saveflag:
+    save_results(type_, score, input_dir)
+
+  return score
+
+
+def _predict(samples, clustering_model, outdir):
   if 10000 < len(samples):
     n, _ = divmod(len(samples), 10000)
     split_list = np.array_split(samples, n)
@@ -200,11 +278,17 @@ def _predict(samples, clustering_model):
 
   labels = []
 
+  features_list = []
+  model, device, transform = base_extractor()
   for split in tqdm(split_list, desc="Prediction(by split set)"):
     print(f'[D] subset type: {type(split)}, length: {len(split)}')
-    features = get_image_features(samples)
+    features = get_image_features(split, model, device, transform)
     t_labels = clustering_model.predict(features)
+    features_list.extend(features)
     labels.extend(t_labels)
+
+  # metric
+  cluster_metric(features_list, labels, outdir, type_="chindex")
 
   return labels
 
@@ -220,19 +304,17 @@ def predict(model_dir, outdir, o_filename, samples, _n_clusters):
   for n_cluster in n_clusters:
     model_filename = os.path.join(model_dir, o_filename+'_'+str(n_cluster)+'.pkl')
     c_model = pickle.load(open(model_filename, "rb"))
-    l = _predict(samples, c_model)
-    save(outdir+'_'+str(n_cluster), l, samples)
+    dir_ = outdir+'_'+str(n_cluster)
+    if not os.path.isdir(dir_):
+      print('[D]The directory is not present. Creating a new one..')
+      os.makedirs(dir_)
+
+    l = _predict(samples, c_model, dir_)
+    save(dir_, l, samples)
     
 
 def save(outdir, labels, samples):
   max_label = max(labels)
-  print(f'[D]output diredtory: {outdir}')
-  if not os.path.isdir(outdir):
-    print('[D]The directory is not present. Creating a new one..')
-    os.makedirs(outdir)
-  else:
-    print('[D]The directory is present.')
-  
   # make output sub-directory
   for sub_idx in range(max_label+1):
     try:
@@ -248,33 +330,8 @@ def save(outdir, labels, samples):
 
 
 def main():
-  parser = argparse.ArgumentParser(description='Image clustering')
-  parser.add_argument('--mode', dest='mode', choices=['train', 'predict', 'train_and_predict'],
-                      default='train-and-predict', 
-                      help='Operation mode [train|predict|train_and_predict] (default: predict)')
-  parser.add_argument('--type', dest='type', choices=['kmeans', 'gmm', 'dbscan'],
-                      default='kmeans', 
-                      help='Clustering model type')
-  parser.add_argument('--input_dir', dest='indir', 
-                      default='/data/kwkim/aadw/dataset/bladder/test_patches',
-                      help='Train Dataset Directory (default: /data/kwkim/aadw/dataset/in)')
-  parser.add_argument('--output_dir', dest='outdir', 
-                      default='/data/kwkim/aadw/results/test_clustering',
-                      help='Result Directory (default: /data/kwkim/aadw/dataset/out)')
-  parser.add_argument('--model_dir', dest='mdir', 
-                      default='/data/kwkim/aadw/test_trained',
-                      help='Result Directory (default: /data/kwkim/aadw/dataset/out)')
-  parser.add_argument('--trained', dest='trained', 
-                      default='gmm-test',
-                      help='...(default: kmeans_result)')
-  parser.add_argument('--epochs', dest='epochs', 
-                      default=10, type=int,
-                      help='the number of epochs(default: 10)')
-  parser.add_argument('--n_cluster', dest='ncluster', required=False, 
-                      nargs='+', type=int)
-
-  args = parser.parse_args()
-
+  # arguments
+  args = arguments()
 
   s = get_files(args.indir)
 
