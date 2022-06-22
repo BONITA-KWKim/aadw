@@ -404,10 +404,10 @@ result dir: /data/kwkim/aadw/results/bladder_kmeans_v3.0
 ''' USAGE
 python src/hierarchy_clustering.py --mode kmeans \
 --input_dir /data/kwkim/dataset/bladder/trainset_v3.0 \
---output_dir /data/kwkim/aadw/results/bladder_kmeans_v3.0/20220610N001/cluster \
---feature_name features
---model_dir /data/kwkim/aadw/pretrained/kmeans/bladder_kmeans_v3.0_20220610N001 \
---model_name bladder_kmeans_v3.0_20220610N001 \
+--output_dir /data/kwkim/aadw/results/bladder_kmeans_v3.0/20220616N001/cluster \
+--feature_name features/features-nasnet-umap.npy \
+--model_dir /data/kwkim/aadw/pretrained/kmeans/bladder_kmeans_v3.0_20220616N001 \
+--model_name bladder_kmeans_v3.0_20220616N001 \
 --level 10
 
 tree /data/kwkim/aadw/results/bladder_kmeans_v3.0/20220607N001
@@ -434,7 +434,7 @@ from utils.log import make_logger
 if __name__=="__main__":
   args = arguments()
   global logger
-  logger = make_logger("hierarchy_cluster", level="info")
+  logger = make_logger("hierarchy_cluster", level="debug")
   logger.info("START HIERARCHY CLUSTER")
 
   mode = args.mode
@@ -457,7 +457,10 @@ if __name__=="__main__":
   input_dir = heap[0]["image_dir"]
   images_info = get_files(input_dir, type="both")
   # total_features = load_npy(os.path.join(input_dir, "HE-features.npy"))
+  logger.debug(f"feature file name: {os.path.join(input_dir, args.featurename)}")
   total_features = load_npy(os.path.join(input_dir, args.featurename))
+  logger.debug(f"features: {len(total_features)}")
+  exit(0)
   if total_features is None:
     total_features = get_features(images_info)
     save_npy(total_features, input_dir, name=args.featurename)

@@ -1,7 +1,7 @@
 import os
 import argparse
-import cv2
 from tqdm import tqdm
+import umap # neads pyparsing==2.4.7
 
 import utils.StainNorm as sn
 from utils.common import get_files
@@ -10,7 +10,6 @@ from models.feature_extraction import base_extractor
 from models.feature_extraction import get_a_image_feature_with_normailzation
 from models.feature_extraction import get_a_image_feature
 from models.feature_extraction import save_npy
-from models.feature_extraction import load_npy
 
 
 def arguments():
@@ -44,17 +43,37 @@ def arguments():
   parser.add_argument('--output_dir', dest='outdir', 
                       default='./output', 
                       help='Result Directory (default: ./output)')
+  parser.add_argument("--umap", dest='umapflag', type=_str2bool, nargs='?',
+                      const=True, default=False,
+                      help="Umap Flag")
   args = parser.parse_args()
   return args
 
 
+def reduce_dimension(feature_info, n_components:int=100):
+  print(f'[I] UMAP')
+  features = []
+  for image_name in feature_info:
+    features.append(feature_info[image_name])
+  
+  reducer = umap.UMAP(n_components=n_components)
+  r = reducer.fit_transform(features)
+  return r
+
+
+NORMALIZATION_METHODS = {
+  "he": sn.TYPE_HE,
+  "eosin": sn.TYPE_EOSIN,
+  "hematoxylin": sn.TYPE_HEMATOXYLIN
+}
 PREFIXES = {
   sn.TYPE_HE: "HE",
   sn.TYPE_EOSIN: "EOSIN",
   sn.TYPE_HEMATOXYLIN: "HEMATOXYLIN",
 }
 def create_feature_npy(images_info, featurename:str, model:str, normalization,   
-                       saveflag, outdir):
+                       saveflag, outdir, umapflag):
+  # extract feature without normalization
   features = dict()
   new_model, device, transform = base_extractor(model)
   for item in tqdm(images_info, desc="Feature Extracting ..."):
@@ -62,16 +81,26 @@ def create_feature_npy(images_info, featurename:str, model:str, normalization,
     features[item["name"]] = feature
   save_npy(features, outdir, name=f'{featurename}-{model}')
 
-  if "none"==normalization: return
+  # reduct demension with UMAP
+  if umapflag:
+    reduced = reduce_dimension(features, n_components=100)
+    save_npy(reduced, outdir, name=f'{featurename}-{model}-umap-100')
+    reduced = reduce_dimension(features, n_components=60)
+    save_npy(reduced, outdir, name=f'{featurename}-{model}-umap-60')
+    reduced = reduce_dimension(features, n_components=20)
+    save_npy(reduced, outdir, name=f'{featurename}-{model}-umap-20')
   
-  if "he"==normalization:
-    methods = [sn.TYPE_HE]
-  elif "eosin"==normalization:
-    methods = [sn.TYPE_EOSIN]
-  elif "hematoxylin"==normalization:
-    methods = [sn.TYPE_HEMATOXYLIN]
-  elif "all"==normalization:
-    methods = [sn.TYPE_HE, sn.TYPE_EOSIN, sn.TYPE_HEMATOXYLIN]
+  # extract feature with normalization
+  if "all"==normalization:
+    methods = [
+      NORMALIZATION_METHODS["he"],
+      NORMALIZATION_METHODS["eosin"],
+      NORMALIZATION_METHODS["hematoxylin"]
+    ]
+  elif "none"==normalization:
+    methods = []
+  else:
+    methods = [NORMALIZATION_METHODS[normalization]]
  
   for method in methods:
     print(f'[D] prefix: {PREFIXES[method]}')
@@ -84,6 +113,15 @@ def create_feature_npy(images_info, featurename:str, model:str, normalization,
                     stain_outdir, PREFIXES[method], new_model, device, transform)
       stain_features[item["name"]] = feature
     save_npy(stain_features, outdir, name=f'{PREFIXES[method]}-{featurename}-{model}')
+
+    # reduct demension with UMAP
+    if umapflag:
+      reduced = reduce_dimension(stain_features, n_components=100)
+      save_npy(reduced, outdir, name=f'{PREFIXES[method]}-{featurename}-{model}-umap-100')
+      reduced = reduce_dimension(stain_features, n_components=60)
+      save_npy(reduced, outdir, name=f'{PREFIXES[method]}-{featurename}-{model}-umap-60')
+      reduced = reduce_dimension(stain_features, n_components=20)
+      save_npy(reduced, outdir, name=f'{PREFIXES[method]}-{featurename}-{model}-umap-20')
 
 
 def main():
@@ -98,21 +136,29 @@ def main():
 
   for model in models:
     create_feature_npy(images_info, args.featurename, model, 
-        args.mode.lower(), args.saveflag, args.outdir)
+        args.mode.lower(), args.saveflag, args.outdir, args.umapflag)
 
   return 0
 
 
 '''
-rm -r /data/kwkim/aadw/stain_test
-python src/stain_normalization.py --input_dir /data/kwkim/dataset/bladder/trainset_v3.0 \
---output_dir /data/kwkim/dataset/bladder/trainset_v3.0 \
---feature_name features --mode all --model resnet --save False
-
-
-python src/stain_normalization.py --input_dir /data/kwkim/dataset/bladder/test_patches \
+rm -r /data/kwkim/dataset/bladder/test_patches/features
+python src/preprocess.py --input_dir /data/kwkim/dataset/bladder/test_patches \
 --output_dir /data/kwkim/dataset/bladder/test_patches/features \
---feature_name features --mode all --model all --save False
+--feature_name features --mode all --model all --save False --umap True
+
+python src/preprocess.py --input_dir /data/kwkim/dataset/bladder/test_patches \
+--output_dir /data/kwkim/dataset/bladder/test_patches/features \
+--feature_name features --mode he --model resnet --save False --umap True
+
+
+python src/preprocess.py --input_dir /data/kwkim/dataset/bladder/trainset-v3.1 \
+--output_dir /data/kwkim/dataset/bladder/trainset-v3.1/features \
+--feature_name features --mode all --model all --save False --umap True
+
+python src/preprocess.py --input_dir /data/kwkim/dataset/bladder/trainset_v3.0 \
+--output_dir /data/kwkim/dataset/bladder/trainset_v3.0/features \
+--feature_name features --mode all --model resnet --save False --umap True
 '''
 if __name__=='__main__':
   main()

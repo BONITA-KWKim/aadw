@@ -94,7 +94,7 @@ def get_a_image_feature_with_normailzation(item, mode, saveflag, outdir, prefix,
 
 def save_npy(features, dir_, name:str="features"):
   npy_filename = os.path.join(dir_, name)
-  np.save(npy_filename, f'{features}.npy') # x_save.npy
+  np.save(npy_filename, features) # x_save.npy
 
 
 def load_npy(dir_: str, name:str="features"):
