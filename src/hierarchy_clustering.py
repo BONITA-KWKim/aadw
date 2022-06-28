@@ -41,6 +41,7 @@ from sklearn.metrics import calinski_harabasz_score
 
 from utils.common import get_files
 from utils.common import get_results
+from utils.log import make_logger
 from models.feature_extraction import base_extractor
 from models.feature_extraction import get_a_image_feature
 from models.feature_extraction import save_npy
@@ -400,21 +401,30 @@ result dir: /data/kwkim/aadw/results/bladder_kmeans_v3.0
 (20220607N002): kmeans with stain normalization(HE)
 (20220607N003): kmeans without stain normalization
 (20220610N001): kmeans. applied nasnetlarge architecture
+
+result dir: /data/kwkim/aadw/results/bladder_kmeans_v3.1/
+<result>
+(20220624N001): vgg-kmeans. EOSIN normalization 
+(20220624N002): vgg-kmeans. EOSIN normalization. Umap(100)
 '''
 ''' USAGE
-python src/hierarchy_clustering.py --mode kmeans \
---input_dir /data/kwkim/dataset/bladder/trainset_v3.0 \
---output_dir /data/kwkim/aadw/results/bladder_kmeans_v3.0/20220616N001/cluster \
---feature_name features/features-nasnet-umap.npy \
---model_dir /data/kwkim/aadw/pretrained/kmeans/bladder_kmeans_v3.0_20220616N001 \
---model_name bladder_kmeans_v3.0_20220616N001 \
---level 10
+nohup python src/hierarchy_clustering.py --mode kmeans \
+--input_dir /data/kwkim/dataset/bladder/trainset-v3.1 \
+--output_dir /data/kwkim/aadw/results/bladder_kmeans_v3.1/20220627N001/cluster \
+--feature_name features/EOSIN-features-vgg-umap-100 \
+--model_dir /data/kwkim/aadw/pretrained/kmeans/bladder_kmeans_v3.1_20220627N001 \
+--model_name bladder_kmeans_v3.1_20220627N001 \
+--level 10 > 20220627-HC.log &
 
 tree /data/kwkim/aadw/results/bladder_kmeans_v3.0/20220607N001
 tree /data/kwkim/aadw/pretrained/kmeans/bladder_kmeans_v3.0_20220607N001
 
 rm -r /data/kwkim/aadw/results/bladder_kmeans_v3.0/20220607N001
 rm -r /data/kwkim/aadw/pretrained/kmeans/bladder_kmeans_v3.0_20220607N001
+
+mkdir thumbnail
+ls */thumbnail_* | xargs -n1 -I{} cp {} thumbnail/
+mv thumbnail vgg_umap_100_thumbnail
 '''
 ''' TEST
 python src/hierarchy_clustering.py --mode birch \
@@ -430,7 +440,6 @@ tree /data/kwkim/aadw/pretrained/h_test/20220607N001
 rm -r /data/kwkim/aadw/results/h_test
 rm -r /data/kwkim/aadw/pretrained/h_test/20220607N001
 '''
-from utils.log import make_logger
 if __name__=="__main__":
   args = arguments()
   global logger
@@ -457,10 +466,10 @@ if __name__=="__main__":
   input_dir = heap[0]["image_dir"]
   images_info = get_files(input_dir, type="both")
   # total_features = load_npy(os.path.join(input_dir, "HE-features.npy"))
-  logger.debug(f"feature file name: {os.path.join(input_dir, args.featurename)}")
-  total_features = load_npy(os.path.join(input_dir, args.featurename))
+  total_features = load_npy(input_dir, args.featurename)
+  logger.debug(f'f type: {type(total_features)}')
   logger.debug(f"features: {len(total_features)}")
-  exit(0)
+
   if total_features is None:
     total_features = get_features(images_info)
     save_npy(total_features, input_dir, name=args.featurename)
@@ -475,7 +484,7 @@ if __name__=="__main__":
   for l in tqdm(range(level-1), desc="Clustering ..."):
     for i in range(int(math.pow(2, l+1))-1, int(math.pow(2, l+2)-1)):
       logger.debug(f"level: {l}\tworking node: {i}")
-      saveflag = True if l >= (level-3) else False
+      saveflag = True if l >= (level-2) else False
       res = run_main(mode, total_features, heap[i], heap[i*2+1], heap[(i+1)*2], saveflag)
       if res is False: continue
       

@@ -9,3 +9,5 @@ results/
 
 *.jpg
 *.png
+*.log.*
+*.log

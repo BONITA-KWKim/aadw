@@ -58,7 +58,12 @@ def reduce_dimension(feature_info, n_components:int=100):
   
   reducer = umap.UMAP(n_components=n_components)
   r = reducer.fit_transform(features)
-  return r
+  
+  reduced = dict()
+  for idx, image_name in enumerate(feature_info):
+    reduced[image_name] = r[idx]
+
+  return reduced
 
 
 NORMALIZATION_METHODS = {
@@ -74,8 +79,8 @@ PREFIXES = {
 def create_feature_npy(images_info, featurename:str, model:str, normalization,   
                        saveflag, outdir, umapflag):
   # extract feature without normalization
-  features = dict()
   new_model, device, transform = base_extractor(model)
+  features = dict()
   for item in tqdm(images_info, desc="Feature Extracting ..."):
     feature = get_a_image_feature(item["path"], new_model, device, transform)
     features[item["name"]] = feature
@@ -149,16 +154,21 @@ python src/preprocess.py --input_dir /data/kwkim/dataset/bladder/test_patches \
 
 python src/preprocess.py --input_dir /data/kwkim/dataset/bladder/test_patches \
 --output_dir /data/kwkim/dataset/bladder/test_patches/features \
---feature_name features --mode he --model resnet --save False --umap True
+--feature_name features --mode none --model all --save True --umap True
 
 
 python src/preprocess.py --input_dir /data/kwkim/dataset/bladder/trainset-v3.1 \
 --output_dir /data/kwkim/dataset/bladder/trainset-v3.1/features \
---feature_name features --mode all --model all --save False --umap True
+--feature_name features --mode none --model all --save False --umap True
 
 python src/preprocess.py --input_dir /data/kwkim/dataset/bladder/trainset_v3.0 \
 --output_dir /data/kwkim/dataset/bladder/trainset_v3.0/features \
 --feature_name features --mode all --model resnet --save False --umap True
+
+nohup python src/preprocess.py --input_dir /data/kwkim/dataset/bladder/trainset-v3.1 \
+--output_dir /data/kwkim/dataset/bladder/trainset-v3.1/features \
+--feature_name features --mode all --model all --save False --umap True > 20220620-preprocessing.log &
+
 '''
 if __name__=='__main__':
   main()
