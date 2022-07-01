@@ -43,6 +43,13 @@ ssh -T github.com-userA
 3. key_file_name.pub 내용을 복사 후 등록
 
 
+## local project user 설정
+```
+git config --local user.name "userA"
+git config --local user.email "userA@email.com"
+```
+
+
 ## project 원격 저장소 변경
 ```
 git remote set-url origin git@github.com:${github name}/projectA.git
