@@ -22,7 +22,7 @@ def get_model(type_:str="resnet"):
     model = get_resnet_features()
 
   # Change the device to GPU
-  device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
+  device = torch.device('cuda:1' if torch.cuda.is_available() else "cpu")
   model = model.to(device)
   return model, device
 
