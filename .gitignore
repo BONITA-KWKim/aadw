@@ -4,6 +4,8 @@ pretrained/
 .ipynb_checkpoints/
 
 results/
+build/
+dist/
 
 *.egg-info
 

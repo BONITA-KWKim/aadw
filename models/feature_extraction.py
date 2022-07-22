@@ -22,7 +22,7 @@ def get_model(type_:str="resnet"):
     model = get_resnet_features()
 
   # Change the device to GPU
-  device = torch.device('cuda:1' if torch.cuda.is_available() else "cpu")
+  device = torch.device('cuda:3' if torch.cuda.is_available() else "cpu")
   model = model.to(device)
   return model, device
 
@@ -99,13 +99,17 @@ def save_npy(features, dir_, name:str="features"):
 
 def load_npy(dir_: str, name:str="features"):
   npy = None
-  filename = os.path.join(dir_, f'{name}.npy')
-  print(f'[D] feature filename: {filename}')
+  if name.endswith("npy"):
+    filename = os.path.join(dir_, f'{name}')
+  else:
+    filename = os.path.join(dir_, f'{name}.npy')
+
+  # print(f'[D] feature filename: {filename}')
   if os.path.exists(filename):
     npy = np.load(filename, allow_pickle=True)
-    print(f'[D] npy type: type({type(npy)})')
-    # npy = npy if isinstance(npy, np.ndarray) else npy.item()
-    npy = npy.item()
+    # print(f'[D] npy type: type({type(npy)})')
+    npy = npy if isinstance(npy, np.ndarray) else npy.item()
+    # npy = npy.item()
   return npy
 
 

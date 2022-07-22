@@ -54,8 +54,6 @@ class CAE_5(nn.Module):
     self.conv4 = nn.Conv2d(filters[2], filters[3], 5, stride=2, padding=2, bias=bias)
     self.conv5 = nn.Conv2d(filters[3], filters[4], 3, stride=2, padding=0, bias=bias)
 
-    self.flatten = nn.Flatten()
-
     lin_features_len = ((input_shape[0] // 2 // 2 // 2 // 2 - 1) // 2) * \
                        ((input_shape[0] // 2 // 2 // 2 // 2 - 1) // 2) * filters[4]
     
@@ -88,7 +86,6 @@ class CAE_5(nn.Module):
     self.relu3_1 = copy.deepcopy(self.relu)
     self.relu4_1 = copy.deepcopy(self.relu)
     self.relu5_1 = copy.deepcopy(self.relu)
-    self.relu6   = copy.deepcopy(self.relu)
     self.relu1_2 = copy.deepcopy(self.relu)
     self.relu2_2 = copy.deepcopy(self.relu)
     self.relu3_2 = copy.deepcopy(self.relu)
@@ -112,22 +109,20 @@ class CAE_5(nn.Module):
     else:
       x = self.relu5_1(x)
     x = x.view(x.size(0), -1)
-    x = self.flatten(x)
-    x = self.relu6(x)
     x = self.embedding(x)
     extra_out = x
     clustering_out = self.clustering(x)
     x = self.deembedding(x)
-    x = self.relu4_2(x)
+    x = self.relu1_2(x)
     x = x.view(x.size(0), self.filters[4], ((self.input_shape[0]//2//2//2//2-1) // 2), ((self.input_shape[0]//2//2//2//2-1) // 2))
     x = self.deconv5(x)
-    x = self.relu4_2(x)
+    x = self.relu2_2(x)
     x = self.deconv4(x)
     x = self.relu3_2(x)
     x = self.deconv3(x)
-    x = self.relu2_2(x)
+    x = self.relu4_2(x)
     x = self.deconv2(x)
-    x = self.relu1_2(x)
+    x = self.relu5_2(x)
     x = self.deconv1(x)
     if self.activations:
       x = self.tanh(x)
@@ -160,8 +155,6 @@ class CAE_bn5(nn.Module):
     self.conv4 = nn.Conv2d(filters[2], filters[3], 5, stride=2, padding=2, bias=bias)
     self.bn4_1 = nn.BatchNorm2d(filters[3])
     self.conv5 = nn.Conv2d(filters[3], filters[4], 3, stride=2, padding=0, bias=bias)
-
-    self.flatten = nn.Flatten()
 
     lin_features_len = ((input_shape[0] // 2 // 2 // 2 // 2 - 1) // 2) * \
                        ((input_shape[0] // 2 // 2 // 2 // 2 - 1) // 2) * filters[4]
@@ -199,7 +192,6 @@ class CAE_bn5(nn.Module):
     self.relu3_1 = copy.deepcopy(self.relu)
     self.relu4_1 = copy.deepcopy(self.relu)
     self.relu5_1 = copy.deepcopy(self.relu)
-    self.relu6   = copy.deepcopy(self.relu)
     self.relu1_2 = copy.deepcopy(self.relu)
     self.relu2_2 = copy.deepcopy(self.relu)
     self.relu3_2 = copy.deepcopy(self.relu)
@@ -227,8 +219,6 @@ class CAE_bn5(nn.Module):
     else:
       x = self.relu5_1(x)
     x = x.view(x.size(0), -1)
-    x = self.flatten(x)
-    x = self.relu6(x)
     x = self.embedding(x)
     extra_out = x
     clustering_out = self.clustering(x)
