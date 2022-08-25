@@ -130,7 +130,7 @@ def main(argv):
   SEG_LEVEL = 0
   WINDOW_SIZE = 32
   SHRINK_RATIO = 10
-  MAG_SIZE = 14 # window_size(32) * mag_size(7) = real tile size(224)
+  MAG_SIZE = 7 # window_size(32) * mag_size(7) = real tile size(224)
   ''' Open WSI 
   '''
   t0 = time()
@@ -191,10 +191,8 @@ def main(argv):
       # r = wsimap.get_tile(loc, SEG_LEVEL, region_size)
       region = seglevel0_image_np[yy[j]:yy[j]+(wsimap.window_size*MAG_SIZE),  
                                   xx[i]:xx[i]+(wsimap.window_size*MAG_SIZE), :]
-
       # inference
       class_ = random_class()
-      
       # save results information
       for ii in range(MAG_SIZE):
         if (i+ii) > (w_count-1): continue

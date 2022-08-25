@@ -236,7 +236,8 @@ def dcec_train(model, device, dataloader, dataset_size, batch:int=64,
     model.train(True)  # Set model to training mode
 
     # Stop criterion
-    if epoch % update_interval == 0 and not epoch == 0:
+    # if epoch % update_interval == 0 and not epoch == 0:
+    if epoch % update_interval == 0 and epoch > 500:
       c_t0 = time()
       output_distribution, preds = \
           calculate_predictions(model, device, copy.deepcopy(dataloader))
@@ -256,7 +257,7 @@ def dcec_train(model, device, dataloader, dataset_size, batch:int=64,
         print('Label divergence ' + str(delta_label) + ' < tol ' + str(tol))
         print('Reached tolerance threshold. Stopping training.')
         # finished = True
-        break
+        # break
 
     # variables for an epoch
     running_loss = 0.0
@@ -338,20 +339,24 @@ def dcec_train(model, device, dataloader, dataset_size, batch:int=64,
 
 #  nohup python train.py > dcec-20220719-001.log & : cuda102-v100
 #  nohup python train.py > dcec-20220719-002.log & : cuda113-3080
+import os
 if __name__=="__main__":
   # device = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
   device = torch.device('cuda:5' if torch.cuda.is_available() else "cpu")
   cae = CAE_5(input_shape=[512, 512, 3], num_clusters=20)
   
+  if os.path.exists("./full-trained.pt"):
+    cae.load_state_dict(torch.load("./full-trained.pt"))
+
   workers = 8
   batch_size = 128
   # workers = 1
   # batch_size = 2
 
+  # train = True
+  train = False
   pretrained = True
   # pretrained = False
-  train = True
-  # train = False
   if train:
     cae.to(device)
     train_data = DCECDataset('/data/kwkim/dataset/bladder/patch-v4.1/trainset-v4.1',
@@ -365,7 +370,7 @@ if __name__=="__main__":
     dataloader = DataLoader(train_data, batch_size=batch_size, 
                             num_workers=workers, shuffle=False)
     dcec_train(cae, device, dataloader, len(train_data), batch=batch_size, 
-               num_epochs=2000, update_interval=25, tol=1e-3, 
+               num_epochs=2000, update_interval=140, tol=1e-3, 
                pretrained=pretrained, pretrain_path="./pretrained.pt", 
                pretrain_epochs=2000)
 
@@ -412,6 +417,7 @@ if __name__=="__main__":
     t1 = time() 
     print(f'[D] Prediction time: {t1 - t0}')
     print(f'[D] length. path: {len(path_arr)}, prediction: {len(preds)}')
-    # print(f'[D] Path result: {path_arr}')
-    # print(f'[D] inference result: {preds}')
-
+    print(f'[D] Path result: {path_arr}')
+    print(f'[D] inference result: {preds}')
+    for idx, p in enumerate(preds):
+      print(f'({idx}th) prediction: {p}')
