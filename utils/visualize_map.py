@@ -6,7 +6,8 @@ from absl import logging
 
 class WSIElement:
 
-  def __init__(self, x, y):
+  def __init__(self, x, y, verbose=logging.DEBUG):
+    logging.set_verbosity(verbose)
     self.test = 'test'
     self.test_x = x
     self.test_y = y
@@ -16,20 +17,38 @@ class WSIElement:
     self.voted = None
     self.voted_cnt = 0
   
+  
   def get_test(self):
     return f'{self.test}_({self.test_x}, {self.test_y})'
 
 
   def get_voted(self):
     self.voting()
+    # self.voting_tumour()
     return self.voted, self.voted_cnt
 
   
-  def voting(self):
+  def voting(self, th:int=0):
+    logging.debug(f'classification results({self.test_x}, {self.test_y}). pred({len(self.classification)}): {self.classification}')
+    if len(self.classification)==0: return
     vals, counts = np.unique(self.classification, return_counts=True)
     index = np.argmax(counts)
-    self.voted = vals[index]
-    self.voted_cnt = counts[index]
+    if th > counts[index]: 
+      self.voted = None
+      self.voted_cnt = 0
+    else:
+      self.voted = vals[index]
+      self.voted_cnt = counts[index]
+
+  def voting_tumour(self):
+    if len(self.classification)==0: return
+    vals, counts = np.unique(self.classification, return_counts=True)
+
+    if 3 <= len(counts) and 4 < counts[2]:
+      self.voted = vals[2]
+      self.voted_cnt = counts[2]      
+    else:
+      self.voting(15)
 
 
 class WSIMap:

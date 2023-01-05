@@ -8,6 +8,7 @@ build/
 dist/
 
 testbed/
+test*/
 
 *.egg-info
 
@@ -15,3 +16,6 @@ testbed/
 *.png
 *.log.*
 *.log
+
+# ctags
+tags
